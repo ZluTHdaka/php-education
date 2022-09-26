@@ -21,6 +21,6 @@ services:
       POSTGRES_PASSWORD: php-education
     volumes:
       - php-education-postgres-database-volume:/var/lib/postgresql/data
-      - php-education-postgres-home-volume:/root
+      - ./home:/root
     networks:
       - php-education-databases-network

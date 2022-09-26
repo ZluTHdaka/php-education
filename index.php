@@ -69,11 +69,54 @@ class QueryBuilder
         return $this;
     }
 
+    public function where(string $column, string $operator, mixed $value): self
+    {
+        // ...
+        return $this;
+    }
+
+    public function insert(array $values): mixed
+    {
+        // ...
+        return $this;
+    }
+
     public function get(): mixed
     {
         return $this->execute();
     }
 }
 
+$articles = [
+    [
+        'name' => 'Моя первая статья',
+        'article' => 'Что-то интересное',
+    ],
+    [
+        'name' => 'Моя вторая статья',
+        'article' => 'Что-то интересное abc',
+    ],
+];
+
+$insert_builder = new QueryBuilder();
+$insert_builder = $insert_builder
+    ->table('articles')
+;
+
+foreach ($articles as $article) {
+    $result = $insert_builder->insert($article);
+}
+
 $query_builder = new QueryBuilder();
-dd($query_builder->table('articles')->select(['id', 'name'])->get());
+$query_builder = $query_builder
+    ->table('articles')
+    ->select(['id', 'name'])
+;
+
+$query_builder = $query_builder
+    ->where('name', '=', 'test1')
+    ->where('article', 'ilike', '%abc%')
+    ->where('created_at', '>=', '2022-09-26')
+;
+
+dd($query_builder->get());

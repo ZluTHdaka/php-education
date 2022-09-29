@@ -11,14 +11,14 @@ if (!function_exists('dd')) {
     }
 }
 
-
 class QueryBuilder
 {
     protected PDO $connection;
     protected string $current_table;
-    protected string $current_action;
+    protected string $query_format;
     protected array $selected_columns;
-    protected string $query = '';
+    protected array $query_args;
+    protected array $exec_args;
 
     public function __construct(
         string $host = '127.0.0.1',
@@ -43,79 +43,43 @@ class QueryBuilder
         return $this;
     }
 
-    protected function build_query(... $values) : void
-    {
-        switch($this->current_action)
-        {
-            case 'insert':
-                $this->query = sprintf('insert into %s (%s) values (%s)',
-                    $this->current_table,
-                    implode(', ', $this->selected_columns),
-                    "'".implode("', '", $values[0])."'"
-                );
-                break;
-
-            case 'select':
-                $this->query = sprintf('select %s from %s',
-                    implode(', ', $this->selected_columns),
-                    $this->current_table
-                );
-                break;
-
-            case 'delete':
-                $this->query = sprintf('delete from %s', $this->current_table);
-                break;
-            case 'where':
-                if($this->query)
-                {
-                    $this->query .= sprintf(" %s %s %s'%s'",
-                        $values[3],
-                        $values[0],
-                        $values[1],
-                        $values[2]);
-                }
-        }
-    }
-
-    protected function execute()
-    {
-        try {
-            $statement = $this->connection->prepare(
-                $this->query
-            );
-
-            $statement->execute();
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
-
-        } catch (\Throwable $exception) {
-            dd($exception->getMessage());
-        }
-    }
-
     public function select(array $columns): self
     {
         $this->selected_columns = $columns;
-        $this->current_action = 'select';
-        $this->build_query();
+        $this->query_format = 'select %s from %s';
+        $this->query_args = [
+            implode(', ', $this->selected_columns),
+            $this->current_table
+        ];
 
         return $this;
     }
 
-    public function where(string $column, string $operator, mixed $value, string $logic = 'where'): self
+    public function where(string $column, string $operator, mixed $value): self
     {
         //...
-        $this->current_action = 'where';
-        $this->build_query($column, $operator, $value, $logic);
 
         return $this;
     }
 
     public function insert(array $values): self
     {
-        //...
+//        array_walk($values, static fn(&$x) => $x = "'$x'");
+        $params = [];
+        foreach($values as $key => $value)
+            {
+                $params[":".$key] = $value;
+            }
+
         $this->selected_columns = array_keys($values);
-        $this->current_action = 'insert';
-        $this->build_query($values);
+        $this->query_format = 'insert into %s (%s) values(%s)';
+        $this->query_args = [
+            $this->current_table,
+            implode(', ', $this->selected_columns),
+//            implode(', ', $values)
+            implode(', ', array_keys($params))
+        ];
+        $this->exec_args = $params;
 
         return $this;
     }
@@ -123,10 +87,26 @@ class QueryBuilder
     public function delete() : self
     {
         //...
-        $this->current_action = 'delete';
-        $this->build_query();
         return $this;
     }
+
+    protected function execute() : mixed
+    {
+        try {
+            $statement = $this->connection->prepare(
+                vsprintf($this->query_format, $this->query_args)
+            );
+
+            isset($this->exec_args) ?
+                $statement->execute($this->exec_args) :
+                $statement->execute();
+            return $statement->fetchAll(PDO::FETCH_ASSOC);
+
+          } catch (\Throwable $exception) {
+            dd($exception->getMessage());
+        }
+    }
+
     public function get(): mixed
     {
         return $this->execute();
@@ -144,30 +124,39 @@ $articles = [
     ],
 ];
 
+# INSERT TEST
 $insert_builder = new QueryBuilder();
 $insert_builder = $insert_builder
     ->table('articles');
 
 foreach ($articles as $article) {
-    $result = $insert_builder->insert($article)->get();
+    $result = $insert_builder
+        ->insert($article)
+        ->get()
+    ;
 }
 
-$query_delete = new QueryBuilder();
-$query_delete = $query_delete
-    ->table('articles')
-    ->delete()
-    ->where('id', '>', '4')
-    ->where('name', '!=', 'Моя вторая статья', 'and')
-    ->get();
+#DELETE TEST
+//$query_delete = new QueryBuilder();
+//$query_delete = $query_delete
+//    ->table('articles')
+//    ->delete()
+//    ->where('id', '>', '4')
+//    ->where('name', '!=', 'Моя вторая статья', 'and')
+//    ->get()
+//  ;
 
+#SELECT TEST
 $query_builder = new QueryBuilder();
 $query_builder = $query_builder
     ->table('articles')
-    ->select(['id', 'created_at', 'name', 'article']);
+    ->select(['id', 'name', 'article']);
 
-$query_builder = $query_builder
-    ->where('name', '=', 'Моя первая статья')
-    ->where('article', 'ilike', '%abc%', 'or')
-    ->where('created_at', '>=', '2022-09-26', 'or');
+#WHERE TEST
+//$query_builder = $query_builder
+//    ->where('name', '=', 'Моя первая статья')
+//    ->where('article', 'ilike', '%abc%')
+//    ->where('created_at', '>=', '2022-09-26')
+//  ;
 
 dd($query_builder->get());

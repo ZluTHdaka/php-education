@@ -11,6 +11,15 @@ if (!function_exists('dd')) {
     }
 }
 
+if (!function_exists('env')) {
+    function env(string $key, mixed $default = null): mixed
+    {
+        // Должна возвращать значение переданного ключа, например HOST, из файла .env, лежащего в корне проекта
+        // Иначе - значение переданное в переменную default
+        // Например: env('DB_HOST', '127.0.0.2') вернёт значение в .env файле, если оно там есть, иначе вернёт 127.0.0.2
+    }
+}
+
 class QueryBuilder
 {
     protected PDO $connection;
@@ -20,6 +29,7 @@ class QueryBuilder
     protected array $query_args;
     protected array $exec_args;
     protected array $white_list;
+    protected array $where_conditions = [];
 
     public function __construct(
         string $host = '127.0.0.1',
@@ -65,10 +75,14 @@ class QueryBuilder
         return $this;
     }
 
-    public function where(array $data): self
+    public function where(string $column, string $operator, mixed $value, string $boolean = 'and'): self
     {
-        //...
-
+        $this->where_conditions[] = [
+            'column' => $column,
+            'operator' => $operator,
+            'value' => $value,
+            'boolean' => $boolean, // or, and, &, |
+        ];
 
         return $this;
     }
@@ -106,9 +120,11 @@ class QueryBuilder
                 vsprintf($this->query_format, $this->query_args)
             );
 
-            (isset($this->exec_args) === true) ?
-                $statement->execute($this->exec_args) :
+            if (count($this->exec_args)) {
+                $statement->execute($this->exec_args);
+            } else {
                 $statement->execute();
+            }
 
             return $statement->fetchAll(PDO::FETCH_ASSOC);
 
@@ -120,6 +136,17 @@ class QueryBuilder
     public function get(): mixed
     {
         return $this->execute();
+    }
+
+    public function first(): mixed
+    {
+        $result = $this->get();
+
+        if (count($result)) {
+            return $result[0];
+        }
+
+        return $result;
     }
 }
 
@@ -152,7 +179,7 @@ $insert_builder = $insert_builder
 foreach ($articles as $article) {
     $result = $insert_builder
         ->insert($article)
-        ->get()
+        ->get() // exec сразу
     ;
 }
 
@@ -196,7 +223,7 @@ $conditions = [
 
 foreach ($conditions as $data_parameters) {
     $query_builder = $query_builder
-        ->where($data_parameters);
+        ->where('name', '=', '123');
 }
 
 #CLEAR_BUTTON

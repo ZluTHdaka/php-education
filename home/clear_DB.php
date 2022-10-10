@@ -1,5 +1,5 @@
 <?php
-$scriptfile = fopen('build_DB.sql', "r");
+$scriptfile = fopen('../database/init.sql', "r");
 if (!$scriptfile) { die("ERROR: Couldn't open {$scriptfile}.\n"); }
 
 // grab each line of file, skipping comments and blank lines

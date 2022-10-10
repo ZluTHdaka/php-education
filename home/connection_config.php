@@ -8,4 +8,4 @@ $dsn = sprintf(
 );
 $username = 'php-education';
 $password = 'php-education';
-$php_port = '8001';
+$php_port = '8090';

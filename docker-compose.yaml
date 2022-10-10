@@ -7,7 +7,6 @@ networks:
 
 volumes:
   php-education-postgres-database-volume:
-  php-education-postgres-home-volume:
 
 services:
   postgres:
@@ -21,6 +20,6 @@ services:
       POSTGRES_PASSWORD: php-education
     volumes:
       - php-education-postgres-database-volume:/var/lib/postgresql/data
-      - ./home:/root
+      - ./database/init.sql:/docker-entrypoint-initdb.d/create_security.sql
     networks:
       - php-education-databases-network

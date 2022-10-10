@@ -19,13 +19,14 @@ class QueryBuilder
     protected array $selected_columns;
     protected array $query_args;
     protected array $exec_args;
+    protected array $white_list;
 
     public function __construct(
         string $host = '127.0.0.1',
         string $port = '5432',
         string $username = 'php-education',
         string $password = 'php-education',
-        string $database = 'php-education',
+        string $database = 'php-education'
     )
     {
         $this->connection = new PDO(
@@ -39,6 +40,15 @@ class QueryBuilder
     public function table(string $table): self
     {
         $this->current_table = $table;
+        $column_names = $this->connection->query(
+                "SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = '{$table}' and table_schema = 'public'")
+            ->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($column_names as $columns) {
+            $this->white_list['columns'][] = $columns['column_name'];
+        }
 
         return $this;
     }
@@ -55,28 +65,26 @@ class QueryBuilder
         return $this;
     }
 
-    public function where(string $column, string $operator, mixed $value): self
+    public function where(array $data): self
     {
         //...
+
 
         return $this;
     }
 
     public function insert(array $values): self
     {
-//        array_walk($values, static fn(&$x) => $x = "'$x'");
         $params = [];
-        foreach($values as $key => $value)
-            {
+        foreach($values as $key => $value) {
                 $params[":".$key] = $value;
-            }
+        }
 
         $this->selected_columns = array_keys($values);
         $this->query_format = 'insert into %s (%s) values(%s)';
         $this->query_args = [
             $this->current_table,
             implode(', ', $this->selected_columns),
-//            implode(', ', $values)
             implode(', ', array_keys($params))
         ];
         $this->exec_args = $params;
@@ -87,6 +95,7 @@ class QueryBuilder
     public function delete() : self
     {
         //...
+
         return $this;
     }
 
@@ -97,12 +106,13 @@ class QueryBuilder
                 vsprintf($this->query_format, $this->query_args)
             );
 
-            isset($this->exec_args) ?
+            (isset($this->exec_args) === true) ?
                 $statement->execute($this->exec_args) :
                 $statement->execute();
+
             return $statement->fetchAll(PDO::FETCH_ASSOC);
 
-          } catch (\Throwable $exception) {
+        } catch (\Throwable $exception) {
             dd($exception->getMessage());
         }
     }
@@ -111,29 +121,6 @@ class QueryBuilder
     {
         return $this->execute();
     }
-}
-
-$articles = [
-    [
-        'name' => 'Моя первая статья',
-        'article' => 'Что-то интересное'
-    ],
-    [
-        'name' => 'Моя вторая статья',
-        'article' => 'Что-то интересное abc'
-    ],
-];
-
-# INSERT TEST
-$insert_builder = new QueryBuilder();
-$insert_builder = $insert_builder
-    ->table('articles');
-
-foreach ($articles as $article) {
-    $result = $insert_builder
-        ->insert($article)
-        ->get()
-    ;
 }
 
 #DELETE TEST
@@ -146,6 +133,29 @@ foreach ($articles as $article) {
 //    ->get()
 //  ;
 
+# INSERT TEST
+$articles = [
+    [
+        'name' => 'Моя первая статья',
+        'article' => 'Что-то интересное'
+    ],
+    [
+        'name' => 'Моя вторая статья',
+        'article' => 'Что-то интересное abc'
+    ],
+];
+
+$insert_builder = new QueryBuilder();
+$insert_builder = $insert_builder
+    ->table('articles');
+
+foreach ($articles as $article) {
+    $result = $insert_builder
+        ->insert($article)
+        ->get()
+    ;
+}
+
 #SELECT TEST
 $query_builder = new QueryBuilder();
 $query_builder = $query_builder
@@ -153,10 +163,46 @@ $query_builder = $query_builder
     ->select(['id', 'name', 'article']);
 
 #WHERE TEST
-//$query_builder = $query_builder
-//    ->where('name', '=', 'Моя первая статья')
-//    ->where('article', 'ilike', '%abc%')
-//    ->where('created_at', '>=', '2022-09-26')
-//  ;
+$conditions = [
+    [
+        'name' => 'Моя первая статья',
+        'operator' => '='
+    ],
+    [
+        'article' => '%abc%',
+        'operator' => 'ilike',
+        'merge' => 'or'
+    ],
+    [
+        'created_at' => '2022-09-26',
+        'operator' => '>=',
+        'merge' => 'and'
+    ]
+//    'data' => [
+//        'name' => 'Моя первая статья',
+//        'article' => '%abc%',
+//        'created_at' => '2022-09-26'
+//    ],
+//    'operator' => [
+//        '=',
+//        'ilike',
+//        '>='
+//    ],
+//    'merge' => [
+//        'or',
+//        'and'
+//    ]
+];
+
+foreach ($conditions as $data_parameters) {
+    $query_builder = $query_builder
+        ->where($data_parameters);
+}
+
+#CLEAR_BUTTON
+print_r(
+'<form action="./home/clear_DB.php" method="post">
+    <input type="submit" name="clear_DB" value="Reset DataBase structure to default" />
+</form>');
 
 dd($query_builder->get());

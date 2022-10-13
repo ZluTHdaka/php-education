@@ -1,6 +1,8 @@
 <?php
-$scriptfile = fopen('../database/init.sql', "r");
-if (!$scriptfile) { die("ERROR: Couldn't open {$scriptfile}.\n"); }
+require "../config/connection_config.php";
+
+$scriptfile = fopen('./init.sql', "rb");
+if (!$scriptfile) { die("ERROR: Couldn't open $scriptfile.\n"); }
 
 // grab each line of file, skipping comments and blank lines
 
@@ -15,12 +17,7 @@ while (($line = fgets($scriptfile)) !== false) {
 
 $statements = explode(';', $script);
 
-include 'connection_config.php';
-
-$pdo = new PDO($dsn, $username, $password
-//    sprintf("pgsql:host=%s; port=%s; dbname=%s; user=%s; password=%s",
-//        $host, $port, $database, $username, $password)
- );
+$pdo = new PDO($dsn, $username, $password);
 
 foreach($statements as $sql){
     if($sql === '') { continue; }
@@ -28,9 +25,9 @@ foreach($statements as $sql){
     $query->execute();
     if($query->errorCode() !== '00000')
     {
-        header("Location: http://127.0.0.1:{$php_port}/");
+        header("Location: http://127.0.0.1:$php_port/");
         die("ERROR: SQL error code: ".$query->errorCode()."\n");
     }
 }
-header("Location: http://127.0.0.1:{$php_port}/");
+header("Location: http://127.0.0.1:$php_port/");
 die();

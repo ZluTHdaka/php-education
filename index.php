@@ -1,5 +1,7 @@
 <?php
 
+require './config/connection_config.php';
+
 if (!function_exists('dd')) {
     function dd(...$args): void
     {
@@ -8,15 +10,6 @@ if (!function_exists('dd')) {
         }
 
         exit(0);
-    }
-}
-
-if (!function_exists('env')) {
-    function env(string $key, mixed $default = null): mixed
-    {
-        // Должна возвращать значение переданного ключа, например HOST, из файла .env, лежащего в корне проекта
-        // Иначе - значение переданное в переменную default
-        // Например: env('DB_HOST', '127.0.0.2') вернёт значение в .env файле, если оно там есть, иначе вернёт 127.0.0.2
     }
 }
 
@@ -53,7 +46,7 @@ class QueryBuilder
         $column_names = $this->connection->query(
                 "SELECT column_name
                 FROM information_schema.columns
-                WHERE table_name = '{$table}' and table_schema = 'public'")
+                WHERE table_name = '$table' and table_schema = 'public'")
             ->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($column_names as $columns) {
@@ -77,17 +70,23 @@ class QueryBuilder
 
     public function where(string $column, string $operator, mixed $value, string $boolean = 'and'): self
     {
+        if (count($this->where_conditions) === 0)
+        {
+            $boolean = '';
+            $this->query_format .= ' where';
+        }
+
         $this->where_conditions[] = [
-            'column' => $column,
-            'operator' => $operator,
-            'value' => $value,
-            'boolean' => $boolean, // or, and, &, |
+            'boolean' => (string)$boolean, // or, and, &, |
+            'column' => (string)$column,
+            'operator' => (string)$operator,
+            'value' => (string)$value,
         ];
 
         return $this;
     }
 
-    public function insert(array $values): self
+    public function insert(array $values): bool|array
     {
         $params = [];
         foreach($values as $key => $value) {
@@ -103,7 +102,7 @@ class QueryBuilder
         ];
         $this->exec_args = $params;
 
-        return $this;
+        return $this->execute();
     }
 
     public function delete() : self
@@ -113,14 +112,27 @@ class QueryBuilder
         return $this;
     }
 
-    protected function execute() : mixed
+    protected function execute() : bool|array
     {
         try {
+
+            if(count($this->where_conditions) !== 0)
+            {
+                foreach ($this->where_conditions as $condition)
+                {
+                    $this->query_format .= "%s (%s %s '%s') ";
+                    foreach ($condition as $arg)
+                    {
+                        $this->query_args[] = $arg;
+                    }
+                }
+            }
+
             $statement = $this->connection->prepare(
                 vsprintf($this->query_format, $this->query_args)
             );
 
-            if (count($this->exec_args)) {
+            if (isset($this->exec_args)) {
                 $statement->execute($this->exec_args);
             } else {
                 $statement->execute();
@@ -128,12 +140,12 @@ class QueryBuilder
 
             return $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             dd($exception->getMessage());
         }
     }
 
-    public function get(): mixed
+    public function get(): bool|array
     {
         return $this->execute();
     }
@@ -170,17 +182,19 @@ $articles = [
         'name' => 'Моя вторая статья',
         'article' => 'Что-то интересное abc'
     ],
+    [
+        'name' => '123',
+        'article' => 'Ну сработай пожалуйста'
+    ],
 ];
 
-$insert_builder = new QueryBuilder();
+$insert_builder = new QueryBuilder($host, $port, $database, $username, $password);
 $insert_builder = $insert_builder
     ->table('articles');
 
 foreach ($articles as $article) {
     $result = $insert_builder
-        ->insert($article)
-        ->get() // exec сразу
-    ;
+        ->insert($article);
 }
 
 #SELECT TEST
@@ -190,45 +204,13 @@ $query_builder = $query_builder
     ->select(['id', 'name', 'article']);
 
 #WHERE TEST
-$conditions = [
-    [
-        'name' => 'Моя первая статья',
-        'operator' => '='
-    ],
-    [
-        'article' => '%abc%',
-        'operator' => 'ilike',
-        'merge' => 'or'
-    ],
-    [
-        'created_at' => '2022-09-26',
-        'operator' => '>=',
-        'merge' => 'and'
-    ]
-//    'data' => [
-//        'name' => 'Моя первая статья',
-//        'article' => '%abc%',
-//        'created_at' => '2022-09-26'
-//    ],
-//    'operator' => [
-//        '=',
-//        'ilike',
-//        '>='
-//    ],
-//    'merge' => [
-//        'or',
-//        'and'
-//    ]
-];
-
-foreach ($conditions as $data_parameters) {
-    $query_builder = $query_builder
-        ->where('name', '=', '123');
-}
-
+$query_builder = $query_builder
+    ->where('name', '=', '123')
+    ->where('article', 'not like', '%abc%', 'or')
+    ->where('id', '<', '10',);
 #CLEAR_BUTTON
 print_r(
-'<form action="./home/clear_DB.php" method="post">
+    '<form action="./database/clear_DB.php" method="post">
     <input type="submit" name="clear_DB" value="Reset DataBase structure to default" />
 </form>');
 

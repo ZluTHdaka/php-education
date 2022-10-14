@@ -1,17 +1,6 @@
 <?php
 
-require './config/connection_config.php';
-
-if (!function_exists('dd')) {
-    function dd(...$args): void
-    {
-        foreach ($args as $arg) {
-            var_dump($arg);
-        }
-
-        exit(0);
-    }
-}
+require_once __DIR__."/home/utilities.php";
 
 class QueryBuilder
 {
@@ -25,11 +14,11 @@ class QueryBuilder
     protected array $where_conditions = [];
 
     public function __construct(
-        string $host = '127.0.0.1',
-        string $port = '5432',
-        string $username = 'php-education',
-        string $password = 'php-education',
-        string $database = 'php-education'
+        string $host,
+        string $port,
+        string $username,
+        string $password,
+        string $database
     )
     {
         $this->connection = new PDO(
@@ -56,7 +45,7 @@ class QueryBuilder
         return $this;
     }
 
-    public function select(array $columns): self
+    public function select(array $columns = ['*']): self
     {
         $this->selected_columns = $columns;
         $this->query_format = 'select %s from %s';
@@ -108,7 +97,8 @@ class QueryBuilder
     public function delete() : self
     {
         //...
-
+        $this->query_format = 'delete from %s';
+        $this->query_args[] =  $this->current_table;
         return $this;
     }
 
@@ -132,15 +122,11 @@ class QueryBuilder
                 vsprintf($this->query_format, $this->query_args)
             );
 
-            if (isset($this->exec_args)) {
-                $statement->execute($this->exec_args);
-            } else {
-                $statement->execute();
-            }
+            $statement->execute($this->exec_args ?? null);
 
             return $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             dd($exception->getMessage());
         }
     }
@@ -188,7 +174,14 @@ $articles = [
     ],
 ];
 
-$insert_builder = new QueryBuilder($host, $port, $database, $username, $password);
+$insert_builder = new QueryBuilder(
+    host: env('DB_HOST', 'localhost'),
+    port: env('DB_PORT', 5432),
+    username: env('DB_USERNAME', 'php-education'),
+    password: env('DB_PASSWORD', 'php-education'),
+    database: env('DB_DATABASE', 'php-education')
+);
+
 $insert_builder = $insert_builder
     ->table('articles');
 
@@ -198,7 +191,13 @@ foreach ($articles as $article) {
 }
 
 #SELECT TEST
-$query_builder = new QueryBuilder();
+$query_builder = new QueryBuilder(
+    host: env('DB_HOST', 'localhost'),
+    port: env('DB_PORT', 5432),
+    username: env('DB_USERNAME', 'php-education'),
+    password: env('DB_PASSWORD', 'php-education'),
+    database: env('DB_DATABASE', 'php-education')
+);
 $query_builder = $query_builder
     ->table('articles')
     ->select(['id', 'name', 'article']);

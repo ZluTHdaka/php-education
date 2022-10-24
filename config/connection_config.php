@@ -12,4 +12,5 @@ $dsn = sprintf(
     "pgsql:host=%s; port=%s; dbname=%s;",
     $host, $port, $database
 );
+$connect = $dsn."username=$username; password=$password";
 

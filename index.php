@@ -1,216 +1,89 @@
 <?php
+require_once __DIR__.'/home/utilities.php';
+require_once __DIR__.'/classes/QueryBuilder.php';
 
-require_once __DIR__."/home/utilities.php";
+define('DEBUG', env('DEBUG', true));
 
-class QueryBuilder
-{
-    protected PDO $connection;
-    protected string $current_table;
-    protected string $query_format;
-    protected array $selected_columns;
-    protected array $query_args;
-    protected array $exec_args;
-    protected array $white_list;
-    protected array $where_conditions = [];
-
-    public function __construct(
-        string $host,
-        string $port,
-        string $username,
-        string $password,
-        string $database
-    )
-    {
-        $this->connection = new PDO(
-            sprintf(
-                "pgsql:host=%s; port=%s; dbname=%s; user=%s; password=%s",
-                $host, $port, $database, $username, $password
-            )
-        );
-    }
-
-    public function table(string $table): self
-    {
-        $this->current_table = $table;
-        $column_names = $this->connection->query(
-                "SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name = '$table' and table_schema = 'public'")
-            ->fetchAll(PDO::FETCH_ASSOC);
-
-        foreach ($column_names as $columns) {
-            $this->white_list['columns'][] = $columns['column_name'];
-        }
-
-        return $this;
-    }
-
-    public function select(array $columns = ['*']): self
-    {
-        $this->selected_columns = $columns;
-        $this->query_format = 'select %s from %s';
-        $this->query_args = [
-            implode(', ', $this->selected_columns),
-            $this->current_table
-        ];
-
-        return $this;
-    }
-
-    public function where(string $column, string $operator, mixed $value, string $boolean = 'and'): self
-    {
-        if (count($this->where_conditions) === 0)
-        {
-            $boolean = '';
-            $this->query_format .= ' where';
-        }
-
-        $this->where_conditions[] = [
-            'boolean' => (string)$boolean, // or, and, &, |
-            'column' => (string)$column,
-            'operator' => (string)$operator,
-            'value' => (string)$value,
-        ];
-
-        return $this;
-    }
-
-    public function insert(array $values): bool|array
-    {
-        $params = [];
-        foreach($values as $key => $value) {
-                $params[":".$key] = $value;
-        }
-
-        $this->selected_columns = array_keys($values);
-        $this->query_format = 'insert into %s (%s) values(%s)';
-        $this->query_args = [
-            $this->current_table,
-            implode(', ', $this->selected_columns),
-            implode(', ', array_keys($params))
-        ];
-        $this->exec_args = $params;
-
-        return $this->execute();
-    }
-
-    public function delete() : self
-    {
-        //...
-        $this->query_format = 'delete from %s';
-        $this->query_args[] =  $this->current_table;
-        return $this;
-    }
-
-    protected function execute() : bool|array
-    {
-        try {
-
-            if(count($this->where_conditions) !== 0)
-            {
-                foreach ($this->where_conditions as $condition)
-                {
-                    $this->query_format .= "%s (%s %s '%s') ";
-                    foreach ($condition as $arg)
-                    {
-                        $this->query_args[] = $arg;
-                    }
-                }
-            }
-
-            $statement = $this->connection->prepare(
-                vsprintf($this->query_format, $this->query_args)
-            );
-
-            $statement->execute($this->exec_args ?? null);
-
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
-
-        } catch (\Throwable $exception) {
-            dd($exception->getMessage());
-        }
-    }
-
-    public function get(): bool|array
-    {
-        return $this->execute();
-    }
-
-    public function first(): mixed
-    {
-        $result = $this->get();
-
-        if (count($result)) {
-            return $result[0];
-        }
-
-        return $result;
-    }
+if(DEBUG === 'true') {
+    require_once __DIR__ . "/tests/test_unit.php";
 }
 
-#DELETE TEST
-//$query_delete = new QueryBuilder();
-//$query_delete = $query_delete
-//    ->table('articles')
-//    ->delete()
-//    ->where('id', '>', '4')
-//    ->where('name', '!=', 'Моя вторая статья', 'and')
-//    ->get()
-//  ;
+function fill_db() : array
+{
+    $data = [];
+    for ($iteration = 0; $iteration < 100; ++$iteration)
+    {
+        $data[] =
+            [
+                'name' => 'Article '.$iteration,
+                'article' => 'Today number is '.$iteration
+            ];
+    }
+    return $data;
+}
 
-# INSERT TEST
-$articles = [
-    [
-        'name' => 'Моя первая статья',
-        'article' => 'Что-то интересное'
-    ],
-    [
-        'name' => 'Моя вторая статья',
-        'article' => 'Что-то интересное abc'
-    ],
-    [
-        'name' => '123',
-        'article' => 'Ну сработай пожалуйста'
-    ],
+$config = [
+    env('DB_HOST', '127.1.0.1'),
+    env('DB_PORT', '5432'),
+    env('DB_DATABASE', 'php-education'),
+    env('DB_USER', 'php-education'),
+    env('DB_PASSWORD', 'php-education')
 ];
 
-$insert_builder = new QueryBuilder(
-    host: env('DB_HOST', 'localhost'),
-    port: env('DB_PORT', 5432),
-    username: env('DB_USERNAME', 'php-education'),
-    password: env('DB_PASSWORD', 'php-education'),
-    database: env('DB_DATABASE', 'php-education')
+#CLEAR_BUTTON
+/** @noinspection ForgottenDebugOutputInspection */
+print_r(
+    '<form action="/database/clear_DB.php" method="post">
+        <input type="submit" name="clear_DB" value="Reset DataBase structure to default" />
+    </form>'
 );
 
-$insert_builder = $insert_builder
-    ->table('articles');
+#FILL_BUTTON
+/** @noinspection ForgottenDebugOutputInspection */
+print_r(
+    '<form action="/index.php" method="post">
+        <input type="submit" name="filling_button" value="Filling DataBase with 100 essences">
+    </form>'
+);
 
-foreach ($articles as $article) {
-    $result = $insert_builder
-        ->insert($article);
+
+if (isset($_POST['filling_button'])) {
+    $insertion = new QueryBuilder(...$config);
+    foreach (fill_db() as $data)
+    {
+        $insertion->table('articles')->insert($data);
+    }
+    header("Location: http://".env('HOST').':'.env('PORT'));
 }
 
-#SELECT TEST
-$query_builder = new QueryBuilder(
-    host: env('DB_HOST', 'localhost'),
-    port: env('DB_PORT', 5432),
-    username: env('DB_USERNAME', 'php-education'),
-    password: env('DB_PASSWORD', 'php-education'),
-    database: env('DB_DATABASE', 'php-education')
-);
-$query_builder = $query_builder
-    ->table('articles')
-    ->select(['id', 'name', 'article']);
+$query = new QueryBuilder(...$config);
 
-#WHERE TEST
-$query_builder = $query_builder
-    ->where('name', '=', '123')
-    ->where('article', 'not like', '%abc%', 'or')
-    ->where('id', '<', '10',);
-#CLEAR_BUTTON
-print_r(
-    '<form action="./database/clear_DB.php" method="post">
-    <input type="submit" name="clear_DB" value="Reset DataBase structure to default" />
-</form>');
+#SIMPLY GET
+$query->table('articles')->select();
 
-dd($query_builder->get());
+$page = $_GET['page'] ?? 1;
+$limit = $_GET['limit'] ?? 10;
+$output = [];
+$get_operators = [];
+
+if (isset($_GET['operators']))
+{
+    $get_operators = explode('%', $_GET['operators']);
+}
+
+foreach ($query->white_list['columns'] as $arg)
+{
+    if (isset($_GET[$arg]))
+    {
+        if (count($get_operators))
+        {
+            $query->where($arg, $get_operators[0], $_GET[$arg]);
+            array_shift($get_operators);
+        }
+        else
+        {
+            $query->where($arg, '=', $_GET[$arg]);
+        }
+    }
+}
+dd($query->paginate($page, $limit));

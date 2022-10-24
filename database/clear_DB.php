@@ -39,5 +39,6 @@ foreach($statements as $sql){
         die("ERROR: SQL error code: ".$query->errorCode()."\n");
     }
 }
+
 header('Location: http://'.env('HOST', '127.0.0.1').':'.env('PORT', '8001').'/');
 die();

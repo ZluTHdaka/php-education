@@ -7,7 +7,7 @@ $port = ':'.env('PORT', '1337');
 
 try {
     exec('php -S ' . $host . $port);
-} catch (\Throwable $exception){
-    dd($exception);
+} catch (Throwable $exception){
+    $exception->getMessage();
 }
 // Должен запускать php -S с параметрами из env файла

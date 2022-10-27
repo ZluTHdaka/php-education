@@ -59,31 +59,83 @@ if (isset($_POST['filling_button'])) {
 $query = new QueryBuilder(...$config);
 
 #SIMPLY GET
+//$query->table('articles')->select();
+//
+//$page = $_GET['page'] ?? 1;
+//$limit = $_GET['limit'] ?? 10;
+//$output = [];
+//$get_operators = [];
+//
+//if (isset($_GET['operators']))
+//{
+//    $get_operators = explode('%', $_GET['operators']);
+//}
+//
+//foreach ($query->white_list['columns'] as $arg)
+//{
+//    if (isset($_GET[$arg]))
+//    {
+//        if (count($get_operators))
+//        {
+//            $query->where($arg, $get_operators[0], $_GET[$arg]);
+//            array_shift($get_operators);
+//        }
+//        else
+//        {
+//            $query->where($arg, '=', $_GET[$arg]);
+//        }
+//    }
+//}
+//dd($query->paginate($page, $limit));
+#STRONGLY POST
+$test = [
+    [
+        'name' => 'Article №1',
+        'article' => 'test string'
+    ],
+    'filter' =>
+    [
+        'name' => 'Article',
+        'operator' =>
+            [
+                '=',
+                'second' => 'wut?'
+            ]
+    ]
+];
+
+//function detectRawBody(){
+//    $rawInput = fopen('php://input', 'r');
+//    $tempStream = fopen('php://temp', 'r+');
+//    stream_copy_to_stream($rawInput, $tempStream);
+//    rewind($tempStream);
+//
+//    return $tempStream;
+//}
+
+$data = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST')
+{
+    $data = json_decode(file_get_contents('php://input'), true);
+}
+
 $query->table('articles')->select();
+
+if (isset($data['filter']))
+{
+    foreach ($data['filter'] as $condition)
+    {
+        $query->where($condition['column'], $condition['operator'], $condition['value']);
+    }
+}
+
+dd($query);
 
 $page = $_GET['page'] ?? 1;
 $limit = $_GET['limit'] ?? 10;
-$output = [];
-$get_operators = [];
 
-if (isset($_GET['operators']))
-{
-    $get_operators = explode('%', $_GET['operators']);
-}
+$orderBy = $data['order'] ?? 1;
+$query->order('id', $orderBy);
 
-foreach ($query->white_list['columns'] as $arg)
-{
-    if (isset($_GET[$arg]))
-    {
-        if (count($get_operators))
-        {
-            $query->where($arg, $get_operators[0], $_GET[$arg]);
-            array_shift($get_operators);
-        }
-        else
-        {
-            $query->where($arg, '=', $_GET[$arg]);
-        }
-    }
-}
 dd($query->paginate($page, $limit));

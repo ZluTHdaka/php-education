@@ -110,17 +110,13 @@ class QueryBuilder
     {
         try {
 
-            if(count($this->where_conditions) !== 0)
-            {
-                foreach ($this->where_conditions as $condition)
-                {
+            if(count($this->where_conditions) !== 0) {
+                foreach ($this->where_conditions as $condition) {
                     $this->query_format .= "%s (%s %s '%s') ";
-                    foreach ($condition as $arg)
-                    {
+                    foreach ($condition as $arg) {
                         $this->query_args[] = $arg;
                     }
                 }
-
             }
 
             $statement = $this->connection->prepare(
@@ -142,6 +138,15 @@ class QueryBuilder
         return $this->execute();
     }
 
+    public function order(string $column, int $sequence) : mixed
+    {
+        $this->query_format .= " order by %s %s";
+        $this->query_args[] = $column;
+        if ($sequence === -1) {$this->query_args[] = 'DESC';}
+        else {$this->query_args[] = 'ASC';}
+
+        return $this;
+    }
 
     public function limit(int $count = 10) : array|bool
     {
@@ -158,7 +163,7 @@ class QueryBuilder
         return array_slice($result, offset: $selection_offset, length: $selection_limit);
     }
 
-    public function first($count = 1): mixed
+    public function first($count = 1): bool|array
     {
         $result = $this->get();
 
@@ -180,7 +185,7 @@ class QueryBuilder
         return $result;
     }
 
-    public function get_TableSize()
+    public function get_TableSize() : int
     {
         return $this->size;
     }

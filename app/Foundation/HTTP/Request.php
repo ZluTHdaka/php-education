@@ -23,7 +23,6 @@ class Request
         $this->uri = $_SERVER["REQUEST_URI"];
         $this->path = explode("?", $this->uri)[0];
         $this->host = $_SERVER["HTTP_HOST"];
-        $this->headers = $this->getHeaders();
         $this->query = $_GET;
         $this->files = $_FILES;
 
@@ -54,8 +53,7 @@ class Request
     {
         foreach ($this->headers as $key=> $value){
             if ($key == $header){
-                $meaning = [$key=>$value];
-                return $meaning;
+                return [$key=>$value];
             }
         }
         return null;
@@ -67,11 +65,11 @@ class Request
     }
 
     /**
-     * @param array $headars
+     * @param array $headers
      */
-    public function setHeaders(array $headars): void
+    public function setHeaders(array $headers): void
     {
-        $this->headers = $headars;
+        $this->headers = $headers;
     }
 
     /**

@@ -13,12 +13,12 @@ if (!function_exists('env')) {
     }
 }
 
-if (!function_exists('config')) {
-    function config(string $key, mixed $default = null): mixed
-    {
-        return App\Foundation\Config\Config::get($key, $default);
-    }
-}
+//if (!function_exists('config')) {
+//    function config(string $key, mixed $default = null): mixed
+//    {
+//        return App\Foundation\Config\Config::get($key, $default);
+//    }
+//}
 
 if (!function_exists('path')) {
     function path(string $filepath): mixed

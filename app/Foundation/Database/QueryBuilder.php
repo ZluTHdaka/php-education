@@ -136,7 +136,7 @@ class QueryBuilder
 
             return $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $exception->getMessage();
             return false;
         }

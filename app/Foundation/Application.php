@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Foundation;
 
 use App\Common\Patterns\Singleton;
+use App\Foundation\Configuration\Config;
 use App\Foundation\HTTP\Request;
 use App\Foundation\Router\Router;
 use JetBrains\PhpStorm\NoReturn;
@@ -15,6 +16,7 @@ class Application extends Singleton
 {
     protected string $root_path;
     protected Router $router;
+    protected Config $config;
 
     public function run()
     {
@@ -70,5 +72,7 @@ class Application extends Singleton
     protected function init(): void
     {
         $this->router = Router::getInstance();
+        $this->config = Config::getInstance();
+        $this->config->init();
     }
 }

@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace App\Foundation\Database;
 
+use mysql_xdevapi\Exception;
 use PDO;
 
 class QueryBuilder
 {
     protected PDO $connection;
     protected int $size = 0;
+    protected int $last_page = 0;
     protected string $current_table = '';
     protected string $query_format = '';
     protected array $selected_columns = [];
@@ -69,7 +71,6 @@ class QueryBuilder
         if (count($this->where_conditions) === 0)
         {
             $boolean = '';
-            $this->query_format .= ' where';
         }
 
         $this->where_conditions[] = [
@@ -97,16 +98,40 @@ class QueryBuilder
             implode(', ', array_keys($params))
         ];
         $this->exec_args = $params;
-        ++$this->size;
-
-        return $this->execute();
+        $response = $this->execute();
+        if ($response) {
+            ++$this->size;
+        }
+        return $response;
     }
 
     /** @noinspection SqlWithoutWhere */
-    public function delete() : self
+    public function delete() : self|bool
     {
-        $this->query_format = 'delete from %s' . $this->query_format;
-        array_unshift($this->query_args, $this->current_table);
+        $this->query_format = 'delete from %s';
+        $this->query_args[] = $this->current_table;
+        $response = $this->execute();
+        if ($response) {
+            --$this->size;
+            return $this;
+        }
+        return false;
+    }
+
+    public function update($values) : QueryBuilder
+    {
+        $params = [];
+        foreach ($values as $key => $value)
+        {
+            $params[] = "$key = '$value'";
+        }
+
+        $this->query_format = 'update %s set %s';
+        $this->query_args = [
+            $this->current_table,
+            implode(', ', $params)
+        ];
+
         $this->execute();
         return $this;
     }
@@ -114,12 +139,12 @@ class QueryBuilder
     protected function execute() : bool|array
     {
         try {
-
             if(count($this->where_conditions) !== 0)
             {
+                $this->query_format .= ' where';
                 foreach ($this->where_conditions as $condition)
                 {
-                    $this->query_format .= "%s (%s %s '%s') ";
+                    $this->query_format .= " %s (%s %s %s)";
                     foreach ($condition as $arg)
                     {
                         $this->query_args[] = $arg;
@@ -133,8 +158,15 @@ class QueryBuilder
             );
 
             $statement->execute($this->exec_args ?? null);
+            $this->exec_args = [];
 
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
+            $response = $statement->fetchAll(PDO::FETCH_ASSOC);
+            if (count($response)) {
+                return $response;
+            }
+            else {
+                return false;
+            }
 
         } catch (\Throwable $exception) {
             $exception->getMessage();
@@ -147,6 +179,10 @@ class QueryBuilder
         return $this->execute();
     }
 
+    public function lastInsertedId(): bool|int
+    {
+        return (int)$this->connection->lastInsertId();
+    }
 
     public function limit(int $count = 10) : array|bool
     {
@@ -155,15 +191,25 @@ class QueryBuilder
         return $this->get();
     }
 
-    public function paginate(int $page, int $limit) : array|bool
+    public function paginate(int &$page, int $limit) : array|bool
     {
         $result = $this->get();
-        $selection_offset = --$page * $limit;
+        $count = count($result);
+        $this->last_page = (int)(ceil($count / $limit));
+        if ($page === 0) {
+            $page = $this->last_page;
+        }
+        $selection_offset = ($page - 1) * $limit;
         $selection_limit = $limit;
         return array_slice($result, offset: $selection_offset, length: $selection_limit);
     }
 
-    public function first($count = 1): mixed
+    public function getLastPage() : int
+    {
+        return $this->last_page;
+    }
+
+    public function first($count = 1): array|bool
     {
         $result = $this->get();
 
@@ -174,7 +220,7 @@ class QueryBuilder
         return $result;
     }
 
-    public function last(): mixed
+    public function last(): string|int|bool|array|null
     {
         $result = $this->get();
 
@@ -185,7 +231,7 @@ class QueryBuilder
         return $result;
     }
 
-    public function get_TableSize()
+    public function getTableSize(): int
     {
         return $this->size;
     }

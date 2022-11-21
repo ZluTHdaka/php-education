@@ -51,7 +51,7 @@ class Request
 
     public function getHeader(string $header): ?array
     {
-        foreach ($this->headers as $key=> $value){
+        foreach ($this->headers as $key => $value){
             if ($key == $header){
                 return [$key=>$value];
             }
@@ -224,5 +224,10 @@ class Request
         }
 
         return null;
+    }
+
+    public function all(): array
+    {
+        return array_merge_recursive_distinct($this->body, $this->query);
     }
 }

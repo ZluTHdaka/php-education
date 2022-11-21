@@ -20,6 +20,13 @@ if (!function_exists('env')) {
 //    }
 //}
 
+if (!function_exists('config')) {
+    function config(string $name, mixed $default = null): mixed
+    {
+        return \App\Foundation\Configuration\Config::getInstance()->get($name, $default);
+    }
+}
+
 if (!function_exists('path')) {
     function path(string $filepath): mixed
     {

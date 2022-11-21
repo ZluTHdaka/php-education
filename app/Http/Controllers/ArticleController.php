@@ -10,79 +10,124 @@ use PDO;
 
 class ArticleController
 {
-    public function getArticles(Request $request): Response
+    public function response(mixed $data) : Response
     {
-        $db = require path('/config/database.php');
-        $query = new QueryBuilder(...$db['connection']);
-        $query->table('articles')->select();
+        $response = new Response();
 
-        $page = $request->getQuery()['page'] ?? 1;
-        $limit = $request->getQuery()['limit'] ?? 10;
+        try {
+            $response->setBody(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        } catch (\JsonException $e) {
+        }
+
+        return $response;
+    }
+
+    protected function getQueryBuilder(): QueryBuilder
+    {
+        $query_builder = new QueryBuilder(...config('database.connection'));
+        $query_builder->table('articles');
+
+        return $query_builder;
+    }
+
+    public function store(Request $request): Response
+    {
+        $query = $this->getQueryBuilder();
+
+        $get_content = $request->all();
+        $query->insert($get_content);
+        $data = $query->select()->where('id', '=', $query->lastInsertedId())->get();
+        return $this->response($data);
+    }
+
+    public function show(Request $request, $article_id): Response
+    {
+        // todo получение сущности по ID
+        $query = $this->getQueryBuilder();
+
+        $data = $query->select()->where('id', '=', $article_id)->get();
+        return $this->response($data);
+    }
+
+    public function update(Request $request, $article_id): Response
+    {
+        // todo изменение сущности по ID
+        $query = $this->getQueryBuilder();
+
+        $updated_content = $request->all();
+        $query->where('id', '=', $article_id)->update($updated_content);
+
+        $data = $query->select()->where('id', '=', $article_id)->get();
+        return $this->response($data);
+    }
+
+    public function destroy(Request $request, $article_id): Response
+    {
+        $query = $this->getQueryBuilder();
+
+        $query->where('id', '=', $article_id);
+        $data = $query->delete();
+
+        if ($data) {
+            header('HTTP/1.1 200 Successful');
+            return $this->response("OK");
+        }
+
+        header('HTTP/1.1 404 Content Not Found');
+        return $this->response("No Content");
+    }
+
+
+    public function index(Request $request): Response
+    {
+        // todo должен возвращать коллекцию сущностей (список)
+        $query = $this->getQueryBuilder();
+        $query->select();
+        $query_args = [];
+        $page = (int)($request->get('page') ?? 1);
+        $limit = (int)($request->get('limit') ?? 10);
         $get_operators = [];
-        $page = (int)$page;
-        $limit = (int)$limit;
 
-        if (isset($request->getQuery()['operators'])) {
-            $get_operators = explode('%', $request->getQuery()['operators']);
+        if ($request->get('operators') !== null) {
+            $get_operators = explode('%', $request->get('operators'));
         }
 
         foreach ($query->white_list['columns'] as $arg) {
-            if (isset($request->getQuery()[$arg])) {
+            if ($request->get($arg) !== null) {
                 if (count($get_operators)) {
-                    $query->where($arg, $get_operators[0], $_GET[$arg]);
-                    array_shift($get_operators);
+                        $query_args[$arg] = [
+                            'column' => $arg,
+                            'operator' => $get_operators[0],
+                            'value' => $request->get($arg),
+                        ];
+                        array_shift($get_operators);
                 } else {
-                    $query->where($arg, '=', $request->getQuery()[$arg]);
+                    $query_args[$arg] = [
+                        'column' => $arg,
+                        'operator' => '=',
+                        'value' => $request->get($arg),
+                    ];
                 }
             }
         }
 
-        $response = new Response();
-        $data = $query->paginate($page, $limit);
-        $meta = [
-            'page' => 'page = '.$page,
-            'limit' => 'limit = '.$limit,
-            'count' => 'count = '.count($data)
-        ];
-        $prepared_data = json_encode($data,JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        $prepared_meta = implode(' ', $meta);
-        $response->setContent(sprintf('data : %s <br> meta : %s', $prepared_data,$prepared_meta));
-        $response->setHeader("content-type", 'text/html');
-        return ($response);
-    }
-
-    public function postArticles(Request $request) : Response
-    {
-        $db = require path('/config/database.php');
-        $query = new QueryBuilder(...$db['connection']);
-        $query->table('articles')->select();
-
-        $page = (int)($request->getQuery()['page'] ?? 1);
-        $limit = (int)($request->getQuery()['limit'] ?? 10);
-
-        $get_content = $request->getBody();
-
-        $filter = $get_content['filter'] ?? null;
-        if (isset($filter))
+        foreach($query_args as $where_condition)
         {
-            foreach ($filter as $where_condition)
-            {
-                $query->where(...$where_condition);
-            }
+            $query->where(...$where_condition);
         }
 
-        $response = new Response();
         $data = $query->paginate($page, $limit);
         $meta = [
-            'page' => 'page = '.$page,
-            'limit' => 'limit = '.$limit,
-            'count' => 'count = '.count($data)
+            'page' => $page,
+            'limit' => $limit,
+            'count' => $query->getTableSize(),
+            'last_page' => $query->getLastPage(),
         ];
-        $prepared_data = json_encode($data,JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        $prepared_meta = implode(' ', $meta);
-        $response->setContent(sprintf('data : %s <br> meta : %s', $prepared_data,$prepared_meta));
-        $response->setHeader("content-type", 'text/html');
-        return ($response);
+        $result = [
+            'data' => $data,
+            'meta' => $meta,
+        ];
+        return $this->response($result);
     }
 
     public function clear(): void
@@ -108,18 +153,10 @@ class ArticleController
 
         $statements = explode(';', $script);
 
-//        $config = [
-//            env('DB_HOST', '127.1.0.1'),
-//            env('DB_PORT', '5432'),
-//            env('DB_DATABASE', 'php-education'),
-//            env('DB_USER', 'php-education'),
-//            env('DB_PASSWORD', 'php-education')
-//        ];
-
-        $db = require(path('config/database.php'));
+        $db = config('database.connection');
 
         $pdo = new PDO(
-            vsprintf('pgsql:host=%s; port=%s; dbname=%s; user=%s; password=%s', $db['connection'])
+            vsprintf('pgsql:host=%s; port=%s; dbname=%s; user=%s; password=%s', $db)
         );
 
         foreach ($statements as $sql) {
@@ -129,29 +166,27 @@ class ArticleController
             $query = $pdo->query($sql);
             if ($query->errorCode() !== '00000') {
                 header('Location: http://' . env('HOST', '127.0.0.1') .
-                    ':' . env('PORT', '8001') . '/articles');
+                    ':' . env('PORT', '80') . '/articles');
                 die("ERROR: SQL error code: " . $query->errorCode() . "\n");
             }
         }
-
         header('Location: http://' . env('HOST', '127.0.0.1') .
-            ':' . env('PORT', '8001') . '/articles');
+            ':' . env('PORT', '80') . '/articles');
     }
 
     public function fill(): void
     {
-        $db = require path('config/database.php');
-        $insertion = new QueryBuilder(...$db['connection']);
+        $insertion = $this->getQueryBuilder();
         $params = [];
         for ($iteration = 0; $iteration < 100; ++$iteration) {
             $params[] =
                 [
                     'name' => 'Article №' . $iteration,
-                    'article' => 'Today number is ' . $iteration
+                    'article' => 'Today number is ' . random_int(0, 10000)
                 ];
         }
         foreach ($params as $data) {
-            $insertion->table('articles')->insert($data);
+            $insertion->insert($data);
         }
         header("Location: http://" . env('HOST') . ':' . env('PORT') . '/articles');
     }

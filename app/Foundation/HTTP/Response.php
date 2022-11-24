@@ -60,6 +60,8 @@ class Response
 
             header($header_name . ': ' . $header_value);
         }
+
+        header(sprintf('HTTP/1.1 %d', $this->code));
     }
 
     /**

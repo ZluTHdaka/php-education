@@ -10,16 +10,35 @@ use PDO;
 
 class ArticleController
 {
-    public function response(mixed $data) : Response
+    public function response(mixed $data, mixed $meta = null, array $headers = [], int $code = 200) : Response
     {
         $response = new Response();
 
+        $response->setHeaders($headers);
+        $response->setCode($code);
+
+        $response_content = [
+            'data' => $data
+        ];
+
+        if ($meta) {
+            $response_content['meta'] = $meta;
+        }
+
         try {
-            $response->setBody(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+            $response->setBody(json_encode($response_content, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         } catch (\JsonException $e) {
         }
 
         return $response;
+    }
+
+    public function makeNotFoundResponse(): Response
+    {
+        return $this->response(
+            data: 'Not found',
+            code: 404
+        );
     }
 
     protected function getQueryBuilder(): QueryBuilder
@@ -36,7 +55,7 @@ class ArticleController
 
         $get_content = $request->all();
         $query->insert($get_content);
-        $data = $query->select()->where('id', '=', $query->lastInsertedId())->get();
+        $data = $query->select()->where('id', '=', $query->lastInsertedId())->first();
         return $this->response($data);
     }
 
@@ -45,20 +64,31 @@ class ArticleController
         // todo получение сущности по ID
         $query = $this->getQueryBuilder();
 
-        $data = $query->select()->where('id', '=', $article_id)->get();
-        return $this->response($data);
+        $data = $query->select()->where('id', '=', $article_id)->first();
+
+        if ($data) {
+            return $this->response($data);
+        }
+
+        return $this->makeNotFoundResponse();
     }
 
     public function update(Request $request, $article_id): Response
     {
         // todo изменение сущности по ID
+        // Нет проверки на Not Found
         $query = $this->getQueryBuilder();
 
         $updated_content = $request->all();
         $query->where('id', '=', $article_id)->update($updated_content);
 
-        $data = $query->select()->where('id', '=', $article_id)->get();
-        return $this->response($data);
+        $data = $query->select()->where('id', '=', $article_id)->first();
+
+        if ($data) {
+            return $this->response($data);
+        }
+
+        return $this->makeNotFoundResponse();
     }
 
     public function destroy(Request $request, $article_id): Response
@@ -69,12 +99,10 @@ class ArticleController
         $data = $query->delete();
 
         if ($data) {
-            header('HTTP/1.1 200 Successful');
             return $this->response("OK");
         }
 
-        header('HTTP/1.1 404 Content Not Found');
-        return $this->response("No Content");
+        return $this->makeNotFoundResponse();
     }
 
 
@@ -123,11 +151,8 @@ class ArticleController
             'count' => $query->getTableSize(),
             'last_page' => $query->getLastPage(),
         ];
-        $result = [
-            'data' => $data,
-            'meta' => $meta,
-        ];
-        return $this->response($result);
+
+        return $this->response($data, $meta);
     }
 
     public function clear(): void

@@ -126,7 +126,7 @@ class QueryBuilder
             $params[] = "$key = '$value'";
         }
 
-        $this->query_format = 'update %s set %s';
+        $this->query_format = 'update %s set %s' ;
         $this->query_args = [
             $this->current_table,
             implode(', ', $params)
@@ -164,9 +164,8 @@ class QueryBuilder
             if (count($response)) {
                 return $response;
             }
-            else {
-                return false;
-            }
+
+            return false;
 
         } catch (\Throwable $exception) {
             $exception->getMessage();
@@ -191,8 +190,18 @@ class QueryBuilder
         return $this->get();
     }
 
-    public function paginate(int &$page, int $limit) : array|bool
+    public function paginate(int &$page, int $limit, $order = 1) : array|bool
     {
+        switch($order) {
+            case 1:
+                $this->query_format .= ' order by id ASC';
+                break;
+            case 2:
+                $this->query_format .= ' order by id DESC';
+                break;
+            default:
+        }
+
         $result = $this->get();
         $count = count($result);
         $this->last_page = (int)(ceil($count / $limit));
@@ -209,15 +218,15 @@ class QueryBuilder
         return $this->last_page;
     }
 
-    public function first($count = 1): array|bool
+    public function first($count = 1): array|null
     {
         $result = $this->get();
 
-        if (count($result)) {
-            return array_slice($result, 0, $count);
+        if (is_array($result) && count($result)) {
+            return $result[0];
         }
 
-        return $result;
+        return null;
     }
 
     public function last(): string|int|bool|array|null

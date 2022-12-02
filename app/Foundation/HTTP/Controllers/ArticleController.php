@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace App\Http\Controllers;
+namespace App\Foundation\HTTP\Controllers;
 
 use App\Foundation\Database\QueryBuilder;
 use App\Foundation\HTTP\Request;

@@ -43,7 +43,7 @@ class Response
         try {
             return json_encode($this->content, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         } catch (\JsonException $e) {
-            $e->getMessage();
+            return $e->getMessage();
         }
     }
 
@@ -91,7 +91,7 @@ class Response
     /**
      * @param array $content
      */
-    public function setContent(mixed ...$content): void
+    public function setContent(mixed $content): void
     {
         $this->content = $content;
     }

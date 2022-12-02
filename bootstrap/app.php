@@ -9,6 +9,16 @@ spl_autoload_register(function (string $className) {
 
 require_once '../app/Helpers/functions_helpers.php';
 
+set_exception_handler([
+    App\Foundation\Exception\ExceptionHandler::class,
+    'handleException'
+]);
+
+set_error_handler([
+    App\Foundation\Exception\ExceptionHandler::class,
+    'handleError'
+]);
+
 $app = App\Foundation\Application::getInstance();
 
 $app->setRootPath($_ENV['APP_BASE_PATH'] ?? dirname(__DIR__));

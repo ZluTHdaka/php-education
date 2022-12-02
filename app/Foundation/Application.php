@@ -5,9 +5,11 @@ namespace App\Foundation;
 
 use App\Common\Patterns\Singleton;
 use App\Foundation\Configuration\Config;
+use App\Foundation\Database\DatabaseConnection;
 use App\Foundation\HTTP\Request;
 use App\Foundation\Router\Router;
 use JetBrains\PhpStorm\NoReturn;
+use PDO;
 
 /**
  * @method static Application getInstance
@@ -17,6 +19,7 @@ class Application extends Singleton
     protected string $root_path;
     protected Router $router;
     protected Config $config;
+    protected DatabaseConnection $database_connection;
 
     public function run()
     {
@@ -36,6 +39,22 @@ class Application extends Singleton
     #[NoReturn] public function terminate(): void
     {
         exit(0);
+    }
+
+    /**
+     * @return PDO
+     */
+    public function getDatabaseConnection(): PDO
+    {
+        return $this->database_connection->getConnection();
+    }
+
+    /**
+     * @param  DatabaseConnection  $database_connection
+     */
+    public function setDatabaseConnection(DatabaseConnection $database_connection): void
+    {
+        $this->database_connection = $database_connection;
     }
 
     /**
@@ -74,5 +93,7 @@ class Application extends Singleton
         $this->router = Router::getInstance();
         $this->config = Config::getInstance();
         $this->config->init();
+
+        $this->setDatabaseConnection(new DatabaseConnection(...config('database.connection')));
     }
 }

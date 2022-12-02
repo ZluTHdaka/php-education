@@ -1,247 +1,348 @@
 <?php
-declare(strict_types=1);
 
 namespace App\Foundation\Database;
 
-use mysql_xdevapi\Exception;
+use App\Common\Hydrate\CanHydrateInterface;
+use App\Foundation\Database\Contracts\QueryBuilderInterface;
+use App\Foundation\Database\Paginator\Paginator;
+use App\Foundation\HTTP\Exceptions\NotFoundException;
 use PDO;
 
-class QueryBuilder
+class QueryBuilder implements QueryBuilderInterface
 {
-    protected PDO $connection;
-    protected int $size = 0;
-    protected int $last_page = 0;
-    protected string $current_table = '';
-    protected string $query_format = '';
-    protected array $selected_columns = [];
-    protected array $query_args = [];
-    protected array $exec_args = [];
-    protected array $where_conditions = [];
-    public array $white_list = [];
+
+    private array $fields = [];
+    private array $conditions = [];
+    private array $execute = [];
+    private string $sort_order;
+    private string $query;
+    private int $limits;
+    private int $offs;
 
     public function __construct(
-        string $host,
-        string $port,
-        string $username,
-        string $password,
-        string $database
+        protected string               $table,
+        protected string               $primary_key,
+        protected PDO                  $connection,
+        protected ?CanHydrateInterface $hydrate_model = null,
     )
     {
-        $this->connection = new PDO(
-            sprintf(
-                "pgsql:host=%s; port=%s; dbname=%s; user=%s; password=%s",
-                $host, $port, $database, $username, $password
-            )
-        );
     }
 
-    public function table(string $table): self
+    /**
+     * @return string
+     */
+    public function getPrimaryKey(): string
     {
-        $this->current_table = $table;
-        $column_names = $this->connection->query(
-            "SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name = '$table' and table_schema = 'public'")
-            ->fetchAll(PDO::FETCH_ASSOC);
+        return $this->primary_key;
+    }
 
-        foreach ($column_names as $columns) {
-            $this->white_list['columns'][] = $columns['column_name'];
+    public function makeClearClone(): QueryBuilderInterface
+    {
+        return new QueryBuilder($this->table, $this->primary_key, $this->connection, $this->hydrate_model);
+    }
+
+    public function select(string|array $select = ["*"]): self
+    {
+        if (is_array($select)) {
+            $this->fields = $select;
+        } else {
+            $this->fields[] = $select;
         }
-        $this->size = $this->connection->query(
-            "SELECT count(*) FROM $table"
-        )->fetchAll(PDO::FETCH_ASSOC)[0]['count'];
-
         return $this;
     }
 
-    public function select(array $columns = ['*']): self
+    public function where(string|array $column, mixed $operator = null, mixed $value = null, string $boolean = 'AND'): self
     {
-        $this->selected_columns = $columns;
-        $this->query_format = 'select %s from %s';
-        $this->query_args = [
-            implode(', ', $this->selected_columns),
-            $this->current_table
-        ];
-
-        return $this;
-    }
-
-    public function where(string $column, string $operator, mixed $value, string $boolean = 'and'): self
-    {
-        if (count($this->where_conditions) === 0)
-        {
-            $boolean = '';
-        }
-
-        $this->where_conditions[] = [
-            'boolean' => $boolean, // or, and, &, |
-            'column' => $column,
-            'operator' => $operator,
-            'value' => (string)$value,
-        ];
-
-        return $this;
-    }
-
-    public function insert(array $values): bool|array
-    {
-        $params = [];
-        foreach($values as $key => $value) {
-            $params[":".$key] = $value;
-        }
-
-        $this->selected_columns = array_keys($values);
-        $this->query_format = 'insert into %s (%s) values(%s)';
-        $this->query_args = [
-            $this->current_table,
-            implode(', ', $this->selected_columns),
-            implode(', ', array_keys($params))
-        ];
-        $this->exec_args = $params;
-        $response = $this->execute();
-        if ($response) {
-            ++$this->size;
-        }
-        return $response;
-    }
-
-    /** @noinspection SqlWithoutWhere */
-    public function delete() : self|bool
-    {
-        $this->query_format = 'delete from %s';
-        $this->query_args[] = $this->current_table;
-        $response = $this->execute();
-        if ($response) {
-            --$this->size;
+        /*
+        IF COLUMN IS ARRAY
+        */
+        if (is_array(func_get_args()[0])) {
+            foreach ($column as $key => $val) {
+                $this->where($key, $val);;
+            }
             return $this;
         }
-        return false;
+        if (!$this->conditions) {
+            $boolean = ' WHERE';
+        }
+        if (!array_key_exists("1", func_get_args()) and !array_key_exists("2", func_get_args())) {
+            return $this;
+        } else if (array_key_exists("1", func_get_args()) and array_key_exists("2", func_get_args())) {
+            /*
+            IS NOT NULL
+            */
+            if (func_get_args()[1] == "!=" and (func_get_args()[2] == null or func_get_args()[2] == 'null') and (!is_array($column))) {
+                $operator = "IS NOT";
+                $value = "NULL";
+                $this->conditions[] = array($boolean, $column, $operator, $value);
+                return $this;
+            }
+            /*
+            VALUE IS ARRAY
+            */
+//            if (is_array($value)) {
+//                foreach ($value as $val) {
+//                    $this->execute[] = $val;
+//                }
+//                $value = str_repeat('?,', count($value) - 1) . '?';
+//                $this->conditions[] = array($boolean, $column, $operator, "($value)");
+//                return $this;
+//            }
+            $this->execute[] = $value;
+            $this->conditions[] = array($boolean, $column, $operator, "?");
+            return $this;
+        } else if (array_key_exists("1", func_get_args()) and !array_key_exists("2", func_get_args())) {
+            /*
+            IS NULL
+            */
+            if ((func_get_args()[1] == null or func_get_args()[1] == 'null') and (!is_array($column))) {
+                $operator = "IS";
+                $value = "NULL";
+                $this->conditions[] = array($boolean, $column, $operator, $value);
+                return $this;
+            }
+            /*
+            IF VALUE EMPTY (null)
+            */
+            if (array_key_exists("1", func_get_args()) and is_null($value) and !is_null($operator)) {
+                $value = $operator;
+                $operator = '=';
+                $this->execute[] = $value;
+                $this->conditions[] = array($boolean, $column, $operator, "?");
+                return $this;
+            }
+            $this->execute[] = $value;
+            $this->conditions[] = array($boolean, $column, $operator, "?");
+            return $this;
+        } else {
+            return $this;
+        }
     }
 
-    public function update($values) : QueryBuilder
+    public function whereIn(string|array $column, mixed $operator = "IN", mixed $value = null, string $boolean = 'AND'): self
     {
-        $params = [];
-        foreach ($values as $key => $value)
-        {
-            $params[] = "$key = '$value'";
+        if (!$this->conditions) {
+            $boolean = ' WHERE';
         }
 
-        $this->query_format = 'update %s set %s' ;
-        $this->query_args = [
-            $this->current_table,
-            implode(', ', $params)
-        ];
-
-        $this->execute();
+        foreach ($value as $val) {
+            $this->execute[] = $val;
+        }
+        $operator = "IN";
+        $value = str_repeat('?,', count($value) - 1) . '?';
+        $this->conditions[] = array($boolean, $column, $operator, "($value)");
         return $this;
     }
 
-    protected function execute() : bool|array
+    /**
+     * @param string|array $sort параметр по которому сортируем
+     * @param string|null $order может быть "ASC" или "DESC"
+     */
+    public function orderby(string|array $sort, string $order = null): self
     {
-        try {
-            if(count($this->where_conditions) !== 0)
-            {
-                $this->query_format .= ' where';
-                foreach ($this->where_conditions as $condition)
-                {
-                    $this->query_format .= " %s (%s %s %s)";
-                    foreach ($condition as $arg)
-                    {
-                        $this->query_args[] = $arg;
-                    }
-                }
-
+        if (array_key_exists("1", func_get_args())) {
+            $this->sort_order = $sort . ' ' . strtoupper($order);
+        } else {
+            if (is_array($sort)) {
+                $this->sort_order = implode(', ', $sort);
+            } else {
+                $this->sort_order = $sort;
             }
+        }
+        return $this;
+    }
 
-            $statement = $this->connection->prepare(
-                vsprintf($this->query_format, $this->query_args)
-            );
+    public function limit(int $limit): self
+    {
+        $this->limits = $limit;
+        return $this;
+    }
 
-            $statement->execute($this->exec_args ?? null);
-            $this->exec_args = [];
+    public function skip(int $offset): self
+    {
+        $this->offs = $offset;
+        return $this;
+    }
 
-            $response = $statement->fetchAll(PDO::FETCH_ASSOC);
-            if (count($response)) {
-                return $response;
+    public function count(): int
+    {
+        $sth = $this->connection->prepare($this->toSql());
+        $sth->execute($this->execute);
+        return $sth->rowCount();
+    }
+
+    public function toSql(): string
+    {
+//        'SELECT ' . implode(', ', $this->fields)
+        return 'SELECT ' . (empty($this->fields) ? "*" : implode(', ', $this->fields))
+            . ' FROM ' . $this->table
+            . $this->buildWhere()
+            . (empty($this->sort_order) ? "" : ' ORDER BY' . " " . $this->sort_order)
+            . (isset($this->limits) ? ' LIMIT ' . $this->limits : "")
+            . (empty($this->offs) ? "" : ' OFFSET ' . $this->offs);
+    }
+
+    private function buildWhere()
+    {
+        $text = [];
+        foreach ($this->conditions as $val) {
+            foreach ($val as $id) {
+                $text[] = $id;
             }
-
-            return false;
-
-        } catch (\Throwable $exception) {
-            $exception->getMessage();
-            return false;
         }
+        $where = implode(" ", $text);
+        return $where;
     }
 
-    public function get(): bool|array
+    public function firstOrFail(): mixed
     {
-        return $this->execute();
-    }
+        $result = $this->first();
 
-    public function lastInsertedId(): bool|int
-    {
-        return (int)$this->connection->lastInsertId();
-    }
-
-    public function limit(int $count = 10) : array|bool
-    {
-        $this->query_format .= ' limit %s';
-        $this->query_args[] = $count;
-        return $this->get();
-    }
-
-    public function paginate(int &$page, int $limit, $order = 1) : array|bool
-    {
-        switch($order) {
-            case 1:
-                $this->query_format .= ' order by id ASC';
-                break;
-            case 2:
-                $this->query_format .= ' order by id DESC';
-                break;
-            default:
-        }
-
-        $result = $this->get();
-        $count = count($result);
-        $this->last_page = (int)(ceil($count / $limit));
-        if ($page === 0) {
-            $page = $this->last_page;
-        }
-        $selection_offset = ($page - 1) * $limit;
-        $selection_limit = $limit;
-        return array_slice($result, offset: $selection_offset, length: $selection_limit);
-    }
-
-    public function getLastPage() : int
-    {
-        return $this->last_page;
-    }
-
-    public function first($count = 1): array|null
-    {
-        $result = $this->get();
-
-        if (is_array($result) && count($result)) {
-            return $result[0];
-        }
-
-        return null;
-    }
-
-    public function last(): string|int|bool|array|null
-    {
-        $result = $this->get();
-
-        if(count($result)){
-            return array_key_last($result);
+        if (is_null($result)) {
+            throw new NotFoundException();
         }
 
         return $result;
     }
 
-    public function getTableSize(): int
+    public function first(): mixed
     {
-        return $this->size;
+        $this->limits = 1;
+        $sth = $this->connection->prepare($this->toSql());
+        $sth->execute($this->execute);
+
+        $result = $sth->fetch();
+
+        if (!is_null($this->hydrate_model)) {
+            $result = $this->hydrate_model::hydrateFromSingle($result);
+        }
+
+        return $result;
     }
+
+    public function get(): mixed
+    {
+        $sth = $this->connection->prepare($this->toSql());
+        $sth->execute($this->execute);
+
+        $result = $sth->fetchAll();
+
+        if (!is_null($this->hydrate_model)) {
+            $result = $this->hydrate_model::hydrateFromCollection($result);
+        }
+
+        return $result;
+    }
+
+    public function insert(array $data): mixed
+    {
+        $this->toInsert($data);
+        $sth = $this->connection->prepare($this->query);
+        $sth->execute($this->execute);
+        $row_id = $this->connection->lastInsertId();
+
+        $query = $this->makeClearClone();
+
+        return $query->where($query->getPrimaryKey(), $row_id)->first();
+    }
+
+    private function toInsert(array $data): string
+    {
+        foreach ($data as $key => $value) {
+            if ($key == "id") {
+                continue;
+            }
+            $this->fields[] = $key;
+            $this->execute[] = $value;
+        }
+
+        $this->query = "INSERT INTO " . $this->table . " (" . implode(", ", $this->fields) . ")"
+            . " VALUES " . "(" . str_repeat('?,', count($this->execute) - 1) . "?" . ")";
+
+        return $this->query;
+    }
+
+    public function update(array $data, array $where): mixed
+    {
+        $this->where($where);
+        $this->toUpdate($data);
+        $sth = $this->connection->prepare($this->query);
+        $sth->execute($this->execute);
+
+        $query = $this->makeClearClone();
+
+        return $query->select()->where($where)->first();
+    }
+
+    private function toUpdate(array $data): string
+    {
+        $text = "";
+        foreach ($data as $key => $value) {
+            if ($value == end($data)) {
+                $text .= " {$key} = ? ";
+            } else {
+                $text .= " {$key} = ?, ";
+            }
+
+            $this->execute[] = $value;
+        }
+
+        $tmp=array_shift($this->execute);
+        $this->execute[] = $tmp;
+        $this->query = "UPDATE " . $this->table
+            . " SET " . $text
+            . $this->buildWhere();
+
+
+        return $this->query;
+    }
+
+    public function delete(array $data): void
+    {
+        foreach ($data as $key => $value) {
+            if ($key == "id") {
+                $this->execute[] = $value;
+            }
+        }
+        $this->query = "DELETE FROM " . $this->table . " WHERE id = ?";
+        $sth = $this->connection->prepare($this->query);
+        $sth->execute($this->execute);
+    }
+
+    public function paginate($limit, $page): Paginator
+    {
+        $total = $this->count();
+        $this->limit($limit);
+        if ($page > 1) {
+            $skip_lines = $limit * ($page - 1);
+            $this->skip($skip_lines);
+        }
+
+        $sth = $this->connection->prepare($this->toSql());
+        $sth->execute($this->execute);
+        $result = $sth->fetchAll();
+
+
+        if (!is_null($this->hydrate_model)) {
+            $result = $this->hydrate_model::hydrateFromCollection($result);
+        }
+
+        return new Paginator($result, $limit, $page, $total);
+    }
+
+    public function beginTransaction(): void
+    {
+        $this->connection->beginTransaction();
+    }
+
+    public function commitTransaction(): void
+    {
+        $this->connection->commit();
+    }
+
+    public function rollBackTransaction(): void
+    {
+        $this->connection->rollBack();
+    }
+
 }

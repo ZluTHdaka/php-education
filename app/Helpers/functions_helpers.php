@@ -6,6 +6,36 @@ if (! function_exists('now')) {
     }
 }
 
+if (! function_exists('helper_database_begin_transaction')) {
+    function helper_database_begin_transaction() : void
+    {
+        /** @var \App\Foundation\Application $app */
+        $app = \App\Foundation\Application::getInstance();
+
+        $app->getDatabaseConnection()->beginTransaction();
+    }
+}
+
+if (! function_exists('helper_database_commit')) {
+    function helper_database_commit() : void
+    {
+        /** @var \App\Foundation\Application $app */
+        $app = \App\Foundation\Application::getInstance();
+
+        $app->getDatabaseConnection()->commit();
+    }
+}
+
+if (! function_exists('helper_database_rollback')) {
+    function helper_database_rollback() : void
+    {
+        /** @var \App\Foundation\Application $app */
+        $app = \App\Foundation\Application::getInstance();
+
+        $app->getDatabaseConnection()->rollBack();
+    }
+}
+
 if (!function_exists('env')) {
     function env(string $key, mixed $default = null): mixed
     {

@@ -7,16 +7,16 @@ use App\Foundation\Database\QueryBuilder;
 use App\Foundation\HTTP\Request;
 use App\Foundation\HTTP\Response;
 use App\Http\Controllers\Common\BaseCRUDController;
-use App\Http\Resources\Article\ArticleCollection;
-use App\Models\Article;
+use App\Http\Resources\Comment\CommentCollection;
+use App\Models\Comment;
 
-class ArticleController extends BaseCRUDController
+class CommentController extends BaseCRUDController
 {
     public function __construct()
     {
-        $this->setCurrentModel(new Article());
-        $this->single_resource = \App\Http\Resources\Article\Article::class;
-        $this->collection_resource = ArticleCollection::class;
+        $this->setCurrentModel(new Comment());
+        $this->single_resource = \App\Http\Resources\Comment\Comment::class;
+        $this->collection_resource = CommentCollection::class;
     }
 
     public function index(Request $request): Response
@@ -67,23 +67,6 @@ class ArticleController extends BaseCRUDController
         );
     }
 
-    public function fill(Request $request)
-    {
-        for ($i = 0; $i < 100; ++$i)
-        {
-            $data = new Article();
-            $data->name = "Article №" . $i;
-            $data->article = "Today number is ". random_int(0, 10000);
-            $data->save();
-        }
-        return $this->index($request);
-    }
-
-    public function clear(Request $request)
-    {
-
-    }
-
     protected function getDefaultOrder(): array|string
     {
         return '-id';
@@ -91,6 +74,6 @@ class ArticleController extends BaseCRUDController
 
     protected function getQueryBuilder(): QueryBuilder
     {
-        return Article::query()->select();
+        return Comment::query()->select();
     }
 }

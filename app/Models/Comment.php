@@ -1,20 +1,22 @@
 <?php
+
 namespace App\Models;
 
 use App\Models\Common\BaseModel;
 
-class Article extends BaseModel
+
+class Comment extends BaseModel
 {
-    protected string $table = "articles";
+    protected string $table = "comments";
 
     /** @var int */
     public $id;
 
-    /** @var string */
-    public $name;
+    /** @var int */
+    public $article_id;
 
     /** @var string */
-    public $article;
+    public $comment;
 
     /** @var string */
     public $created_at;

@@ -1,21 +1,20 @@
 <?php
-declare(strict_types=1);
 
-namespace App\Http\Resources\Article;
+namespace App\Http\Resources\Comment;
 
 use App\Http\Resources\Common\SingleResource;
 
 /**
- * @property \App\Models\Article $resource
+ * @property \App\Models\Comment $resource
  */
-class Article extends SingleResource
+class Comment extends SingleResource
 {
     public function toArray(): array
     {
         return [
             'id' => $this->resource->id,
-            'name' => $this->resource->name,
-            'article' => $this->resource->article,
+            'article_id' => $this->resource->article_id,
+            'comment' => $this->resource->comment,
             'created_at' => $this->resource->created_at,
         ];
     }
